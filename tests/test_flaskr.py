@@ -144,6 +144,53 @@ class TestFlaskr:
             # the database state is not guaranteed. In a real-world scenario,
             # you might want to set up a known database state before running this test.
 
+    def test_delete_entry_logged_in(self):
+        """
+        Test that a logged-in user can delete an entry.
+        """
+        with app.test_client() as client:
+            # Log in
+            client.post('/login', data={
+                'username': app.config['USERNAME'],
+                'password': app.config['PASSWORD']
+            })
+            
+            # Add an entry to delete
+            client.post('/add', data={
+                'title': 'Test Entry to Delete',
+                'text': 'This entry will be deleted'
+            })
+            
+            # Get the ID of the entry we just added
+            with app.app_context():
+                db = get_db()
+                entry = db.execute('SELECT id FROM entries WHERE title = ?', 
+                                  ['Test Entry to Delete']).fetchone()
+                entry_id = entry['id']
+            
+            # Delete the entry
+            response = client.post(f'/delete/{entry_id}', follow_redirects=True)
+            
+            # Check if deletion was successful
+            assert response.status_code == 200
+            assert b'Entry was successfully deleted' in response.data
+            
+            # Verify the entry is no longer in the database
+            with app.app_context():
+                db = get_db()
+                entry = db.execute('SELECT * FROM entries WHERE id = ?', [entry_id]).fetchone()
+                assert entry is None
+
+    def test_delete_entry_not_logged_in(self):
+        """
+        Test that a non-logged-in user cannot delete an entry.
+        """
+        with app.test_client() as client:
+            # Try to delete an entry without logging in
+            response = client.post('/delete/1')
+            
+            # Should get a 401 Unauthorized error
+            assert response.status_code == 401
 
 
 class AuthActions(object):
